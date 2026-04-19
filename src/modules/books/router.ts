@@ -30,6 +30,7 @@ export const bookRouter = new Hono()
 
   .post("/", zValidator("json", CreateBookSchema), async (c) => {
     const body = c.req.valid("json");
+
     const newBook = await prisma.book.create({
       data: {
         author: body.author,
@@ -43,41 +44,65 @@ export const bookRouter = new Hono()
     const id = c.req.param("id");
     const body = c.req.valid("json");
 
-    try {
-      const updatedBook = await prisma.book.update({
-        where: {
-          id: Number(id),
-        },
-        data: {
-          author: body.author,
-          title: body.title,
-        },
-      });
+    const existingBook = await prisma.book.findUnique({
+      where: {
+        id: Number(id),
+      },
+    });
 
-      return c.json(updatedBook);
-    } catch (error) {
-      return c.json({ message: "Book not found" }, 404);
+    if (!existingBook) {
+      return c.json({ message: "Book Not Found" }, 404);
     }
+
+    const updatedBook = await prisma.book.update({
+      where: {
+        id: Number(id),
+      },
+      data: body,
+    });
+
+    return c.json(updatedBook);
   })
 
   .delete("/:id", async (c) => {
     const id = c.req.param("id");
 
-    try {
-      await prisma.book.delete({
-        where: {
-          id: Number(id),
-        },
-      });
-      return c.json({ message: "Book deleted successfully" });
-    } catch (error) {
-      return c.json({ message: "Book not found" }, 404);
+    const existingBook = await prisma.book.findUnique({
+      where: {
+        id: Number(id),
+      },
+    });
+
+    if (!existingBook) {
+      return c.json({ message: "Book Not Found" }, 404);
     }
+
+    await prisma.book.delete({
+      where: {
+        id: Number(id),
+      },
+    });
+
+    return c.json({ message: "Book Deleted Successfully" });
   })
 
   // Actions endpoints
   .post("/:id/borrow", async (c) => {
     const id = c.req.param("id");
+
+    const book = await prisma.book.findUnique({
+      where: {
+        id: Number(id),
+      },
+    });
+
+    if (!book) {
+      return c.json({ message: "Book Not Found" }, 404);
+    }
+
+    if (book.isBorrowed) {
+      return c.json({ message: "Book is Already Borrowed" }, 400);
+    }
 
     const updatedBook = await prisma.book.update({
       where: {
@@ -93,6 +118,20 @@ export const bookRouter = new Hono()
 
   .post("/:id/return", async (c) => {
     const id = c.req.param("id");
+
+    const book = await prisma.book.findUnique({
+      where: {
+        id: Number(id),
+      },
+    });
+
+    if (!book) {
+      return c.json({ message: "Book Not Found" }, 404);
+    }
+
+    if (!book.isBorrowed) {
+      return c.json({ message: "Book is Not Borrowed" }, 400);
+    }
 
     const updatedBook = await prisma.book.update({
       where: {
